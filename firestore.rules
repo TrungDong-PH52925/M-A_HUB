@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Users ---
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if false; 
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) && 
+                      incoming().diff(existing()).affectedKeys().hasAny(['name', 'country', 'role', 'kycStatus']);
+    }
+
+    // --- Companies ---
+    match /companies/{companyId} {
+      allow read: if true;
+      allow create: if isSignedIn() && incoming().ownerId == request.auth.uid;
+      allow update: if isSignedIn() && existing().ownerId == request.auth.uid;
+    }
+
+    // --- Deals ---
+    match /deals/{dealId} {
+      allow read: if (resource.data.status == 'published') || (isSignedIn() && resource.data.sellerId == request.auth.uid);
+      allow create: if isSignedIn() && incoming().sellerId == request.auth.uid;
+      allow update: if isSignedIn() && existing().sellerId == request.auth.uid;
+    }
+
+    // --- Sub-collections ---
+    match /deals/{dealId}/offers/{offerId} {
+      allow read, write: if isSignedIn();
+    }
+    match /deals/{dealId}/ndas/{ndaId} {
+      allow read, write: if isSignedIn();
+    }
+  }
+}

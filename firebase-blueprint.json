@@ -1,0 +1,106 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role and KYC status",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "country": { "type": "string" },
+        "role": { "type": "string", "enum": ["buyer", "seller", "advisor", "admin"] },
+        "kycStatus": { "type": "string", "enum": ["pending", "verified", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "name", "role", "kycStatus"]
+    },
+    "Company": {
+      "title": "Company",
+      "description": "Company profile for M&A listings",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string" },
+        "legalName": { "type": "string" },
+        "taxId": { "type": "string" },
+        "industry": { "type": "string" },
+        "foundedYear": { "type": "integer" },
+        "description": { "type": "string" },
+        "visibility": { "type": "string", "enum": ["public", "private"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "legalName", "industry", "visibility"]
+    },
+    "Deal": {
+      "title": "Deal",
+      "description": "M&A deal listing",
+      "type": "object",
+      "properties": {
+        "sellerId": { "type": "string" },
+        "companyId": { "type": "string" },
+        "title": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "submitted", "approved", "published", "negotiation", "closed"] },
+        "valuation": { "type": "number" },
+        "equityOffered": { "type": "number" },
+        "dealType": { "type": "string", "enum": ["sale_100", "partial_sale", "fundraising"] },
+        "metrics": {
+          "type": "object",
+          "properties": {
+            "revenue": { "type": "number" },
+            "ebitda": { "type": "number" },
+            "netProfit": { "type": "number" }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["sellerId", "companyId", "title", "status", "valuation"]
+    },
+    "Offer": {
+      "title": "Offer",
+      "description": "Deal offer from a buyer",
+      "type": "object",
+      "properties": {
+        "dealId": { "type": "string" },
+        "buyerId": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "counter", "accepted", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["dealId", "buyerId", "amount", "status"]
+    },
+    "NDA": {
+      "title": "Non-Disclosure Agreement",
+      "description": "Signed NDA for deal access",
+      "type": "object",
+      "properties": {
+        "dealId": { "type": "string" },
+        "buyerId": { "type": "string" },
+        "signedAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["active", "expired"] }
+      },
+      "required": ["dealId", "buyerId", "signedAt", "status"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "companies/{companyId}": {
+      "schema": "Company",
+      "description": "Business entities"
+    },
+    "deals/{dealId}": {
+      "schema": "Deal",
+      "description": "Active M&A deals"
+    },
+    "deals/{dealId}/offers/{offerId}": {
+      "schema": "Offer",
+      "description": "Offers made on a deal"
+    },
+    "deals/{dealId}/ndas/{ndaId}": {
+      "schema": "NDA",
+      "description": "NDAs signed for a specific deal"
+    }
+  }
+}
