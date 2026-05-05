@@ -1,0 +1,63 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Extended user information stored in Firestore.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["buyer", "seller", "advisor", "admin"] },
+        "kycStatus": { "type": "string", "enum": ["pending", "verified", "rejected"] },
+        "twoFactorEnabled": { "type": "boolean" },
+        "phoneNumber": { "type": "string" },
+        "company": { "type": "string" },
+        "country": { "type": "string" }
+      },
+      "required": ["uid", "name", "email", "role", "kycStatus"]
+    },
+    "Deal": {
+      "title": "M&A Deal",
+      "description": "A business opportunity listed for sale.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "industry": { "type": "string" },
+        "location": { "type": "string" },
+        "valuation": { "type": "number" },
+        "status": { "type": "string", "enum": ["draft", "submitted", "published", "archived"] },
+        "sellerId": { "type": "string" },
+        "metrics": {
+          "type": "object",
+          "properties": {
+            "revenue": { "type": "number" },
+            "ebitda": { "type": "number" },
+            "netProfit": { "type": "number" },
+            "growthRate": { "type": "number" }
+          }
+        },
+        "strategic": {
+          "type": "object",
+          "properties": {
+            "reasonForSale": { "type": "string" },
+            "futurePlan": { "type": "string" }
+          }
+        },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profiles and permissions."
+    },
+    "/deals/{dealId}": {
+      "schema": "Deal",
+      "description": "Business opportunities."
+    }
+  }
+}
