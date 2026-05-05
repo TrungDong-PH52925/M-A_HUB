@@ -13,6 +13,26 @@ export const translations = {
       signOut: "Sign Out"
     },
     landing: {
+      heroSlides: [
+        {
+          tagline: "Empowering the next generation of business transactions",
+          title1: "The Professional",
+          title2: "M&A Ecosystem",
+          subtitle: "M&A Hub streamlines the entire merger and acquisition lifecycle. From initial listing to secure due diligence and final closing."
+        },
+        {
+          tagline: "Secure, Fast, and Transparent",
+          title1: "Redefining Deal",
+          title2: "Structuring",
+          subtitle: "Experience unparalleled efficiency in executing strategic acquisitions, powered by AI and top-tier security."
+        },
+        {
+          tagline: "Global Network of Verified Investors",
+          title1: "Connect With",
+          title2: "Strategic Buyers",
+          subtitle: "Access a curated network of corporate buyers, private equity firms, and family offices ready to invest."
+        }
+      ],
       tagline: "Empowering the next generation of business transactions",
       title: "The Professional M&A Ecosystem",
       subtitle: "M&A Hub streamlines the entire merger and acquisition lifecycle. From initial listing to secure due diligence and final closing.",
@@ -75,6 +95,27 @@ export const translations = {
       remote: "Remote",
       defaultDescription: "A strategic acquisition opportunity within the technology sector featuring robust EBITDA margins and strong market positioning."
     },
+    admin: {
+      dashboard: "Admin Console",
+      manageUsers: "User Management",
+      manageDeals: "Deal Moderation",
+      approveKyc: "Approve KYC",
+      rejectKyc: "Reject KYC",
+      suspendUser: "Suspend User",
+      approveDeal: "Approve Deal",
+      hideDeal: "Hide Deal",
+      stats: {
+        totalUsers: "Total Users",
+        pendingKyc: "Pending KYC",
+        totalVolume: "Total Volume",
+      }
+    },
+    advisor: {
+      dashboard: "Advisor Hub",
+      assignedDeals: "My Projects",
+      supportRequests: "Support Queue",
+      collaborate: "Collaborate",
+    },
     deals: {
       title: "Active M&A Opportunities",
       subtitle: "Explore verified business opportunities across global markets. Sign NDAs for access to detailed data rooms.",
@@ -132,7 +173,23 @@ export const translations = {
       businessProof: "Business proof",
       submit: "Submit for Verification",
       success: "Verification Successful",
-      successDesc: "Your identity has been verified. Redirecting..."
+      successDesc: "Your identity has been verified. Redirecting...",
+      idBack: "ID Back",
+      idFront: "ID Front",
+      faceVerify: "Face Verification",
+      startCamera: "Start Camera",
+      capture: "Capture Photo",
+      retake: "Retake",
+      selfiePrompt: "Please look directly at the camera and ensure your face is well-lit.",
+      companyProfile: "Company Profile",
+      legalName: "Legal Entity Name",
+      taxId: "Tax ID / Registration Numero",
+      foundingYear: "Founding Year",
+      targetMarket: "Target Market",
+      ownership: "Ownership Structure",
+      founderPct: "Founder %",
+      investorPct: "Investor %",
+      esopPct: "ESOP %",
     },
     auth: {
       signIn: "Sign In",
@@ -162,6 +219,26 @@ export const translations = {
       signOut: "Đăng xuất"
     },
     landing: {
+      heroSlides: [
+        {
+          tagline: "Tối ưu hóa các giao dịch doanh nghiệp thế hệ mới",
+          title1: "Hệ sinh thái",
+          title2: "M&A Chuyên nghiệp",
+          subtitle: "M&A Hub tinh gọn toàn bộ vòng đời sáp nhập và mua lại. Từ niêm yết ban đầu đến thẩm định bảo mật và chốt giao dịch."
+        },
+        {
+          tagline: "Bảo mật, Nhanh chóng và Minh bạch",
+          title1: "Định hình lại",
+          title2: "Cấu trúc Giao dịch",
+          subtitle: "Trải nghiệm hiệu quả vô song trong việc thực hiện các thương vụ chiến lược, được hỗ trợ bởi AI và bảo mật hàng đầu."
+        },
+        {
+          tagline: "Mạng lưới Nhà đầu tư Toàn cầu đã Xác minh",
+          title1: "Kết nối với",
+          title2: "Bên mua Chiến lược",
+          subtitle: "Tiếp cận mạng lưới được tuyển chọn gồm các tập đoàn, quỹ đầu tư tư nhân và family office sẵn sàng đầu tư."
+        }
+      ],
       tagline: "Tối ưu hóa các giao dịch doanh nghiệp thế hệ mới",
       title: "Hệ sinh thái M&A Chuyên nghiệp",
       subtitle: "M&A Hub tinh gọn toàn bộ vòng đời sáp nhập và mua lại. Từ niêm yết ban đầu đến thẩm định bảo mật và chốt giao dịch.",
@@ -224,6 +301,27 @@ export const translations = {
       remote: "Từ xa",
       defaultDescription: "Cơ hội mua lại chiến lược trong lĩnh vực công nghệ có biên độ lợi nhuận EBITDA ổn định và vị thế thị trường mạnh mẽ."
     },
+    admin: {
+      dashboard: "Quản trị hệ thống",
+      manageUsers: "Quản lý người dùng",
+      manageDeals: "Kiểm duyệt Deal",
+      approveKyc: "Duyệt KYC",
+      rejectKyc: "Từ chối KYC",
+      suspendUser: "Khóa người dùng",
+      approveDeal: "Duyệt Deal",
+      hideDeal: "Ẩn Deal",
+      stats: {
+        totalUsers: "Tổng người dùng",
+        pendingKyc: "Chờ duyệt KYC",
+        totalVolume: "Tổng giá trị giao dịch",
+      }
+    },
+    advisor: {
+      dashboard: "Trung tâm Cố vấn",
+      assignedDeals: "Dự án của tôi",
+      supportRequests: "Yêu cầu hỗ trợ",
+      collaborate: "Hợp tác",
+    },
     deals: {
       title: "Cơ hội M&A đang hoạt động",
       subtitle: "Khám phá các cơ hội kinh doanh đã được xác minh trên thị trường toàn cầu. Ký NDA để truy cập phòng dữ liệu chi tiết.",
@@ -281,7 +379,23 @@ export const translations = {
       businessProof: "Bằng chứng kinh doanh",
       submit: "Gửi xác minh",
       success: "Xác minh thành công",
-      successDesc: "Danh tính của bạn đã được xác minh. Đang chuyển hướng..."
+      successDesc: "Danh tính của bạn đã được xác minh. Đang chuyển hướng...",
+      idBack: "Mặt sau ID",
+      idFront: "Mặt trước ID",
+      faceVerify: "Xác thực khuôn mặt",
+      startCamera: "Bật Camera",
+      capture: "Chụp ảnh",
+      retake: "Chụp lại",
+      selfiePrompt: "Vui lòng nhìn thẳng vào camera và đảm bảo khuôn mặt đủ ánh sáng.",
+      companyProfile: "Hồ sơ doanh nghiệp",
+      legalName: "Tên pháp nhân",
+      taxId: "Mã số thuế",
+      foundingYear: "Năm thành lập",
+      targetMarket: "Thị trường mục tiêu",
+      ownership: "Cơ cấu sở hữu",
+      founderPct: "Founder %",
+      investorPct: "Investor %",
+      esopPct: "ESOP %",
     },
     auth: {
       signIn: "Đăng nhập",

@@ -14,7 +14,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ShieldCheck, Info } from 'lucide-react';
 
 export default function LoginPage() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,6 +30,18 @@ export default function LoginPage() {
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email.includes('@')) {
+      setError(language === 'vi' ? 'Email không hợp lệ.' : 'Invalid email address.');
+      return;
+    }
+    if (isSignUp && password.length < 6) {
+      setError(language === 'vi' ? 'Mật khẩu phải có ít nhất 6 ký tự.' : 'Password must be at least 6 characters.');
+      return;
+    }
+    if (isSignUp && !name) {
+      setError(language === 'vi' ? 'Vui lòng nhập họ tên.' : 'Please enter your full name.');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {

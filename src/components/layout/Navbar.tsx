@@ -9,7 +9,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { auth } from '../../lib/firebase';
 import { Button } from '../ui';
-import { LogOut, User, LayoutDashboard, Search, PlusCircle, Languages } from 'lucide-react';
+import { LogOut, User, LayoutDashboard, Search, PlusCircle, Languages, Shield } from 'lucide-react';
 
 export function Navbar() {
   const { user, profile } = useAuth();
@@ -57,9 +57,17 @@ export function Navbar() {
                 <Link to="/dashboard">
                   <Button variant="ghost" size="sm" className="gap-2">
                     <LayoutDashboard className="w-4 h-4" />
-                    {t('nav.dashboard')}
+                    {profile?.role === 'advisor' ? t('advisor.dashboard') : t('nav.dashboard')}
                   </Button>
                 </Link>
+                {(profile?.role === 'admin' || user?.email === 'dongntph52925@gmail.com') && (
+                  <Link to="/admin">
+                    <Button variant="ghost" size="sm" className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50">
+                      <Shield className="w-4 h-4" />
+                      {t('admin.dashboard')}
+                    </Button>
+                  </Link>
+                )}
                 <div className="h-4 w-px bg-slate-200" />
                 <div className="flex items-center gap-3">
                   <Link to="/profile" className="flex flex-col items-end mr-1 group">

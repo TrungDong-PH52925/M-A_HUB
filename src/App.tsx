@@ -18,6 +18,7 @@ import DealDetail from './pages/DealDetail';
 import SubmitDeal from './pages/SubmitDeal';
 import KYCPage from './pages/KYC';
 import ProfilePage from './pages/ProfilePage';
+import AdminDashboard from './pages/AdminDashboard';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -57,6 +58,12 @@ function AppContent() {
         <Route path="/profile" element={
           <ProtectedRoute>
             <ProfilePage />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/admin" element={
+          <ProtectedRoute>
+            <AdminDashboard />
           </ProtectedRoute>
         } />
 

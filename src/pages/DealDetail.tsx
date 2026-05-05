@@ -6,7 +6,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
-import { doc, getDoc, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, collection, addDoc, query, where, getDocs, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { Card, Button, Label, Input } from '../components/ui';
@@ -39,6 +39,8 @@ export default function DealDetail() {
   const [offerAmount, setOfferAmount] = useState('');
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [summarizing, setSummarizing] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editFormData, setEditFormData] = useState<any>(null);
 
   useEffect(() => {
     async function fetchDeal() {
@@ -46,7 +48,22 @@ export default function DealDetail() {
       try {
         const docSnap = await getDoc(doc(db, 'deals', id));
         if (docSnap.exists()) {
-          setDeal({ id: docSnap.id, ...docSnap.data() });
+          const data = { id: docSnap.id, ...docSnap.data() } as any;
+          setDeal(data);
+          setEditFormData({
+            title: data.title,
+            industry: data.industry,
+            location: data.location,
+            description: data.description,
+            valuation: data.valuation,
+            equityOffered: data.equityOffered,
+            revenue: data.metrics?.revenue || '',
+            ebitda: data.metrics?.ebitda || '',
+            netProfit: data.metrics?.netProfit || '',
+            growthRate: data.metrics?.growthRate || '',
+            reasonForSale: data.strategic?.reasonForSale || '',
+            futurePlan: data.strategic?.futurePlan || '',
+          });
           
           if (user) {
             const ndaQuery = query(
@@ -93,11 +110,67 @@ export default function DealDetail() {
     }
   };
 
+  const handleUpdateDeal = async () => {
+    if (!id || !editFormData) return;
+    if (!editFormData.title || !editFormData.industry || !editFormData.location) {
+      alert(language === 'vi' ? 'Tiêu đề, Ngành nghề và Địa điểm không được để trống.' : 'Title, Industry, and Location cannot be empty.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await updateDoc(doc(db, 'deals', id), {
+        title: editFormData.title,
+        industry: editFormData.industry,
+        location: editFormData.location,
+        description: editFormData.description,
+        valuation: parseFloat(editFormData.valuation),
+        equityOffered: parseFloat(editFormData.equityOffered),
+        metrics: {
+          revenue: parseFloat(editFormData.revenue),
+          ebitda: parseFloat(editFormData.ebitda),
+          netProfit: parseFloat(editFormData.netProfit),
+          growthRate: parseFloat(editFormData.growthRate),
+        },
+        strategic: {
+          reasonForSale: editFormData.reasonForSale,
+          futurePlan: editFormData.futurePlan,
+        },
+        updatedAt: new Date().toISOString(),
+      });
+      setIsEditing(false);
+      window.location.reload();
+    } catch (err) {
+      console.error("Error updating deal:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteDeal = async () => {
+    if (!id || !window.confirm(language === 'vi' ? 'Bạn có chắc chắn muốn xóa bài đăng này?' : 'Are you sure you want to delete this listing?')) return;
+    setLoading(true);
+    try {
+      await deleteDoc(doc(db, 'deals', id));
+      navigate('/dashboard');
+    } catch (err) {
+      console.error("Error deleting deal:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSignNDA = async () => {
     if (!user || !id) {
       navigate('/login');
       return;
     }
+    
+    if (profile?.kycStatus !== 'verified') {
+      alert(language === 'vi' ? 'Bạn cần hoàn tất xác minh KYC để ký NDA và xem Data Room.' : 'You must complete KYC verification to sign an NDA and access the Data Room.');
+      navigate('/kyc');
+      return;
+    }
+
     try {
       await addDoc(collection(db, `deals/${id}/ndas`), {
         buyerId: user.uid,
@@ -156,6 +229,21 @@ export default function DealDetail() {
             <p className="text-lg text-slate-600 leading-relaxed italic border-l-4 border-slate-200 pl-6 mb-10">
               {deal.description}
             </p>
+
+            {(ndaSigned || isSeller) && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 mb-12">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="p-6 bg-slate-50 border border-slate-100 rounded-3xl">
+                    <h3 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-4">{language === 'vi' ? 'Lý do bán' : 'Reason for Sale'}</h3>
+                    <p className="text-slate-700 leading-relaxed">{deal.strategic?.reasonForSale || 'N/A'}</p>
+                  </div>
+                  <div className="p-6 bg-slate-50 border border-slate-100 rounded-3xl">
+                    <h3 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-4">{language === 'vi' ? 'Kế hoạch tương lai' : 'Future Plans'}</h3>
+                    <p className="text-slate-700 leading-relaxed">{deal.strategic?.futurePlan || 'N/A'}</p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
 
             {/* AI Summary Section */}
             {(ndaSigned || isSeller) && (
@@ -301,9 +389,14 @@ export default function DealDetail() {
                 </>
               )}
               {isSeller && (
-                <Button className="w-full h-12 text-lg font-bold" onClick={() => navigate('/dashboard')}>
-                  {language === 'vi' ? 'Quản lý bài đăng' : 'Manage Submissions'}
-                </Button>
+                <div className="flex gap-4">
+                  <Button className="flex-1 h-12 text-lg font-bold" onClick={() => setIsEditing(true)}>
+                    {language === 'vi' ? 'Chỉnh sửa' : 'Edit Listing'}
+                  </Button>
+                  <Button variant="outline" className="flex-1 h-12 text-lg font-bold text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300" onClick={handleDeleteDeal}>
+                    {language === 'vi' ? 'Xóa' : 'Delete'}
+                  </Button>
+                </div>
               )}
             </div>
 
@@ -328,11 +421,11 @@ export default function DealDetail() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <div className="flex justify-between text-xs font-bold">
-                  <span>{language === 'vi' ? 'Chỉ số tăng trưởng' : 'Growth Index'}</span>
-                  <span className="text-slate-500">8.2 / 10</span>
+                  <span>{language === 'vi' ? 'Tốc độ tăng trưởng' : 'Growth Rate'}</span>
+                  <span className="text-slate-500">{deal.metrics?.growthRate || '0'}%</span>
                 </div>
                 <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                  <div className="h-full bg-slate-900 w-[82%]" />
+                  <div className="h-full bg-slate-900" style={{ width: `${Math.min((deal.metrics?.growthRate || 0) * 2, 100)}%` }} />
                 </div>
               </div>
               <div className="space-y-2">
@@ -348,6 +441,72 @@ export default function DealDetail() {
           </Card>
         </div>
       </div>
+
+      {/* Edit Modal */}
+      {isEditing && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center px-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto pt-20 pb-10">
+          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-2xl">
+            <Card className="p-8">
+              <h2 className="text-2xl font-bold mb-6">{language === 'vi' ? 'Chỉnh sửa tài sản' : 'Edit Deal'}</h2>
+              <div className="space-y-6">
+                <div>
+                  <Label>{t('submit.headline')}</Label>
+                  <Input 
+                    value={editFormData.title} 
+                    onChange={e => setEditFormData({...editFormData, title: e.target.value})}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>{t('submit.industry')}</Label>
+                    <Input 
+                      value={editFormData.industry} 
+                      onChange={e => setEditFormData({...editFormData, industry: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <Label>{t('submit.location')}</Label>
+                    <Input 
+                      value={editFormData.location} 
+                      onChange={e => setEditFormData({...editFormData, location: e.target.value})}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label>{t('submit.description')}</Label>
+                  <textarea 
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 h-32"
+                    value={editFormData.description}
+                    onChange={e => setEditFormData({...editFormData, description: e.target.value})}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>{language === 'vi' ? 'Định giá ($)' : 'Valuation ($)'}</Label>
+                    <Input 
+                      type="number"
+                      value={editFormData.valuation} 
+                      onChange={e => setEditFormData({...editFormData, valuation: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <Label>{language === 'vi' ? 'Cổ phần (%)' : 'Equity (%)'}</Label>
+                    <Input 
+                      type="number"
+                      value={editFormData.equityOffered} 
+                      onChange={e => setEditFormData({...editFormData, equityOffered: e.target.value})}
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-4 pt-4">
+                  <Button variant="outline" className="flex-1" onClick={() => setIsEditing(false)}>{language === 'vi' ? 'Hủy' : 'Cancel'}</Button>
+                  <Button className="flex-1" onClick={handleUpdateDeal} disabled={loading}>{loading ? '...' : (language === 'vi' ? 'Cập nhật' : 'Update')}</Button>
+                </div>
+              </div>
+            </Card>
+          </motion.div>
+        </div>
+      )}
 
       {/* Offer Modal */}
       {showOfferForm && (

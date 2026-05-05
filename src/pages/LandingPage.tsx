@@ -3,15 +3,58 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
-import { motion } from 'motion/react';
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence, animate, useInView } from 'motion/react';
 import { Button } from '../components/ui';
 import { Link } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ArrowRight, BarChart3, Shield, Zap, Globe, Users } from 'lucide-react';
 
+function AnimatedNumber({ value, prefix = "", suffix = "", decimals = 0 }: { value: number, prefix?: string, suffix?: string, decimals?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const isInView = useInView(ref, { once: true, margin: "0px 0px -100px 0px" });
+
+  useEffect(() => {
+    if (isInView && ref.current) {
+      const controls = animate(0, value, {
+        duration: 2.5,
+        ease: "easeOut",
+        onUpdate(val) {
+          if (ref.current) {
+            if (decimals === 0) {
+              ref.current.textContent = `${prefix}${Math.floor(val).toLocaleString()}${suffix}`;
+            } else {
+              ref.current.textContent = `${prefix}${val.toFixed(decimals)}${suffix}`;
+            }
+          }
+        }
+      });
+      return () => controls.stop();
+    }
+  }, [value, prefix, suffix, decimals, isInView]);
+
+  return <div ref={ref} className="text-4xl font-bold mb-2">{prefix}0{suffix}</div>;
+}
+
+const HERO_IMAGES = [
+  "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=2970&auto=format&fit=crop", // Corporate skyscraper
+  "https://images.unsplash.com/photo-1600880292203-757bb62b4baf?q=80&w=2940&auto=format&fit=crop", // Business meeting
+  "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?q=80&w=2940&auto=format&fit=crop"  // Financial analysis
+];
+
 export default function LandingPage() {
   const { t } = useLanguage();
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const heroSlides = (t('landing.heroSlides') as any[]) || [];
+
+  useEffect(() => {
+    if (heroSlides.length === 0) return;
+    const timer = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [heroSlides.length]);
+
   const container = {
     hidden: { opacity: 0 },
     show: {
@@ -28,40 +71,54 @@ export default function LandingPage() {
   return (
     <div className="bg-white overflow-hidden">
       {/* Hero Section */}
-      <section className="relative pt-32 pb-20 lg:pt-48 lg:pb-32 px-4">
-        <div className="absolute inset-0 -z-10 overflow-hidden">
-          <div className="absolute -top-1/2 left-1/2 -translate-x-1/2 w-[1000px] h-[1000px] bg-slate-50 rounded-full blur-3xl opacity-50" />
+      <section className="relative min-h-[90vh] flex items-center pt-32 pb-20 lg:pt-40 lg:pb-32 px-4">
+        {/* Background Image & Overlay */}
+        <div className="absolute inset-0 z-0 overflow-hidden">
+          <AnimatePresence mode="popLayout">
+            <motion.img 
+              key={currentSlide}
+              initial={{ opacity: 0, scale: 1.05 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 1.5, ease: "easeOut" }}
+              src={HERO_IMAGES[currentSlide] || HERO_IMAGES[0]} 
+              alt="Background" 
+              className="absolute inset-0 w-full h-full object-cover object-center"
+            />
+          </AnimatePresence>
+          <div className="absolute inset-0 bg-slate-950/80 mix-blend-multiply z-10" />
+          <div className="absolute inset-0 bg-gradient-to-b from-slate-900/60 via-slate-900/40 to-slate-950 z-10" />
         </div>
         
-        <div className="max-w-7xl mx-auto text-center">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-600 text-xs font-semibold mb-8"
-          >
-            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            {t('landing.tagline')}
-          </motion.div>
-          
-          <motion.h1 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-5xl lg:text-7xl font-bold text-slate-900 tracking-tight mb-8"
-          >
-            {t('landing.title').split(' ').slice(0, 2).join(' ')} <br /> 
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-slate-500">
-              {t('landing.title').split(' ').slice(2).join(' ')}
-            </span>
-          </motion.h1>
-          
-          <motion.p 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="text-lg text-slate-600 max-w-2xl mx-auto mb-10 leading-relaxed"
-          >
-            {t('landing.subtitle')}
-          </motion.p>
+        <div className="relative z-10 w-full max-w-7xl mx-auto text-center">
+          <div className="min-h-[450px] sm:min-h-[400px] lg:min-h-[420px] flex flex-col items-center justify-center">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentSlide}
+                initial={{ opacity: 0, x: 50 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -50 }}
+                transition={{ duration: 0.4 }}
+                className="flex flex-col items-center"
+              >
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-white text-xs font-semibold mb-8 backdrop-blur-md">
+                  <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                  {heroSlides[currentSlide]?.tagline || t('landing.tagline')}
+                </div>
+                
+                <h1 className="text-5xl lg:text-7xl font-bold text-white tracking-tight mb-8 drop-shadow-lg">
+                  {heroSlides[currentSlide]?.title1 || t('landing.title')} <br /> 
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-yellow-500 drop-shadow-sm">
+                    {heroSlides[currentSlide]?.title2}
+                  </span>
+                </h1>
+                
+                <p className="text-lg text-slate-300 max-w-2xl mx-auto mb-10 leading-relaxed font-light">
+                  {heroSlides[currentSlide]?.subtitle || t('landing.subtitle')}
+                </p>
+              </motion.div>
+            </AnimatePresence>
+          </div>
           
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
@@ -70,12 +127,12 @@ export default function LandingPage() {
             className="flex flex-col sm:flex-row items-center justify-center gap-4"
           >
             <Link to="/login">
-              <Button size="lg" className="w-full sm:w-auto gap-2 group">
+              <Button size="lg" className="w-full sm:w-auto gap-2 group bg-yellow-500 text-slate-900 hover:bg-yellow-400 border-none font-semibold shadow-xl">
                 {t('landing.ctaEnter')} <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </Button>
             </Link>
             <Link to="/deals">
-              <Button variant="outline" size="lg" className="w-full sm:w-auto">
+              <Button variant="outline" size="lg" className="w-full sm:w-auto bg-transparent border-white/30 text-white hover:bg-white/10 backdrop-blur-sm">
                 {t('landing.ctaBrowse')}
               </Button>
             </Link>
@@ -85,7 +142,7 @@ export default function LandingPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.5 }}
-            className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-8 opacity-40 grayscale"
+            className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-8 opacity-60 text-white"
           >
             {/* Mock logos */}
             <div className="flex items-center justify-center font-bold text-2xl italic tracking-tighter">GlobalCorp</div>
@@ -100,15 +157,15 @@ export default function LandingPage() {
       <section className="py-20 bg-slate-900 text-white">
         <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-12">
           <div className="text-center">
-            <div className="text-4xl font-bold mb-2">$4.2B+</div>
+            <AnimatedNumber value={4.2} prefix="$" suffix="B+" decimals={1} />
             <div className="text-slate-400 text-sm">{t('landing.stats.volume')}</div>
           </div>
           <div className="text-center">
-            <div className="text-4xl font-bold mb-2">1,200+</div>
+            <AnimatedNumber value={1200} suffix="+" />
             <div className="text-slate-400 text-sm">{t('landing.stats.entities')}</div>
           </div>
           <div className="text-center">
-            <div className="text-4xl font-bold mb-2">98%</div>
+            <AnimatedNumber value={98} suffix="%" />
             <div className="text-slate-400 text-sm">{t('landing.stats.success')}</div>
           </div>
         </div>

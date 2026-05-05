@@ -23,27 +23,51 @@ service cloud.firestore {
       return resource.data;
     }
 
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'dongntph52925@gmail.com' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    function isAdvisor() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'advisor';
+    }
+
+    function isVerified() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.kycStatus == 'verified';
+    }
+
     // --- Users ---
     match /users/{userId} {
       allow get: if isSignedIn();
-      allow list: if false; 
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId) && 
-                      incoming().diff(existing()).affectedKeys().hasAny(['name', 'country', 'role', 'kycStatus']);
+      allow list: if isAdmin(); 
+      allow create: if isOwner(userId) && incoming().role != 'admin'; // Cannot self-promote to admin
+      allow update: if isOwner(userId) && (
+        // Regular user can only update these
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'country', 'company', 'phoneNumber', 'twoFactorEnabled']) ||
+        // Admin can update everything (role, kycStatus)
+        isAdmin()
+      );
     }
 
     // --- Companies ---
     match /companies/{companyId} {
       allow read: if true;
       allow create: if isSignedIn() && incoming().ownerId == request.auth.uid;
-      allow update: if isSignedIn() && existing().ownerId == request.auth.uid;
+      allow update: if (isSignedIn() && existing().ownerId == request.auth.uid) || isAdmin();
     }
 
     // --- Deals ---
     match /deals/{dealId} {
-      allow read: if (resource.data.status == 'published') || (isSignedIn() && resource.data.sellerId == request.auth.uid);
-      allow create: if isSignedIn() && incoming().sellerId == request.auth.uid;
-      allow update: if isSignedIn() && existing().sellerId == request.auth.uid;
+      allow read: if (resource.data.status == 'published') || 
+                     (isSignedIn() && resource.data.sellerId == request.auth.uid) || 
+                     isAdmin() || isAdvisor();
+      allow create: if isSignedIn() && 
+                       (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'seller' || isAdmin()) && 
+                       incoming().sellerId == request.auth.uid;
+      allow update: if (isSignedIn() && existing().sellerId == request.auth.uid) || isAdmin();
     }
 
     // --- Sub-collections ---

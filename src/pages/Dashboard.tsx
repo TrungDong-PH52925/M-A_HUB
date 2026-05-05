@@ -104,48 +104,54 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Activity */}
         <div className="lg:col-span-2 space-y-8">
-          {profile.role === 'seller' && (
-            <section>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-bold text-slate-900">{t('dashboard.recentListings')}</h2>
-                <Link to="/my-deals" className="text-sm font-semibold text-slate-600 hover:text-slate-900 underline">{t('dashboard.viewAll')}</Link>
-              </div>
-              
-              <div className="space-y-4">
-                {loading ? (
-                  Array(3).fill(0).map((_, i) => (
-                    <div key={i} className="h-24 bg-slate-100 animate-pulse rounded-xl" />
-                  ))
-                ) : deals.length > 0 ? (
-                  deals.map((deal) => (
-                    <Card key={deal.id} className="p-4 flex items-center justify-between hover:border-slate-300 transition-all cursor-pointer">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-slate-900 rounded-lg flex items-center justify-center text-white font-bold">
-                          {deal.title.charAt(0)}
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-slate-900">{deal.title}</h3>
-                          <div className="flex items-center gap-3 mt-1">
-                            <span className="text-xs font-semibold px-2 py-0.5 bg-slate-100 text-slate-600 rounded">
-                              {deal.status.toUpperCase()}
-                            </span>
-                            <span className="text-xs text-slate-400">${(deal.valuation / 1000000).toFixed(1)}M {t('dashboard.valuation')}</span>
-                          </div>
+        {(profile.role === 'seller' || profile.role === 'advisor') && (
+          <section>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-slate-900">
+                {profile.role === 'advisor' ? t('advisor.assignedDeals') : t('dashboard.recentListings')}
+              </h2>
+              <Link to="/my-deals" className="text-sm font-semibold text-slate-600 hover:text-slate-900 underline">{t('dashboard.viewAll')}</Link>
+            </div>
+            
+            <div className="space-y-4">
+              {loading ? (
+                Array(3).fill(0).map((_, i) => (
+                  <div key={i} className="h-24 bg-slate-100 animate-pulse rounded-xl" />
+                ))
+              ) : deals.length > 0 ? (
+                deals.map((deal) => (
+                  <Card key={deal.id} className="p-4 flex items-center justify-between hover:border-slate-300 transition-all cursor-pointer">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-slate-900 rounded-lg flex items-center justify-center text-white font-bold">
+                        {deal.title.charAt(0)}
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-slate-900">{deal.title}</h3>
+                        <div className="flex items-center gap-3 mt-1">
+                          <span className="text-xs font-semibold px-2 py-0.5 bg-slate-100 text-slate-600 rounded">
+                            {deal.status.toUpperCase()}
+                          </span>
+                          <span className="text-xs text-slate-400">
+                            ${(deal.valuation / 1000000).toFixed(1)}M {t('dashboard.valuation')}
+                          </span>
                         </div>
                       </div>
-                      <Link to={`/deals/${deal.id}`}>
-                        <Button variant="ghost" size="sm">{t('dashboard.manage')}</Button>
-                      </Link>
-                    </Card>
-                  ))
-                ) : (
-                  <div className="text-center py-12 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
-                    <p className="text-slate-400">{t('dashboard.noListings')}</p>
-                  </div>
-                )}
-              </div>
-            </section>
-          )}
+                    </div>
+                    <Link to={`/deals/${deal.id}`}>
+                      <Button variant="ghost" size="sm">{t('dashboard.manage')}</Button>
+                    </Link>
+                  </Card>
+                ))
+              ) : (
+                <div className="text-center py-12 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
+                  <p className="text-slate-400">
+                    {profile.role === 'advisor' ? 'No deals assigned for advisory yet.' : t('dashboard.noListings')}
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
           <section>
             <h2 className="text-lg font-bold text-slate-900 mb-4">{t('dashboard.recentActivity')}</h2>

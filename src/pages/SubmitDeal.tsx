@@ -11,7 +11,7 @@ import { db } from '../lib/firebase';
 import { Card, Button, Input, Label } from '../components/ui';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { ArrowLeft, CheckCircle, Info, PlusCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Info, PlusCircle, Upload, FileText } from 'lucide-react';
 
 export default function SubmitDeal() {
   const { user, profile } = useAuth();
@@ -19,6 +19,7 @@ export default function SubmitDeal() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
+  const [documents, setDocuments] = useState<File[]>([]);
   const [formData, setFormData] = useState({
     title: '',
     industry: '',
@@ -29,6 +30,9 @@ export default function SubmitDeal() {
     revenue: '',
     ebitda: '',
     netProfit: '',
+    growthRate: '',
+    reasonForSale: '',
+    futurePlan: '',
     dealType: 'sale_100',
     visibility: 'public'
   });
@@ -71,7 +75,42 @@ export default function SubmitDeal() {
     );
   }
 
+  const handleNextStep = (next: number) => {
+    if (step === 1) {
+      if (!formData.title || !formData.industry || !formData.location) {
+        alert(language === 'vi' ? 'Tiêu đề, Ngành nghề và Địa điểm là bắt buộc.' : 'Title, Industry and Location are required.');
+        return;
+      }
+    }
+    if (step === 2) {
+      if (!formData.revenue || !formData.ebitda || !formData.valuation) {
+        alert(language === 'vi' ? 'Vui lòng điền đầy đủ các chỉ số tài chính.' : 'Please fill in all financial metrics.');
+        return;
+      }
+    }
+    if (step === 3) {
+      if (documents.length === 0) {
+        alert(language === 'vi' ? 'Vui lòng cung cấp tài liệu chứng minh cho Deal.' : 'Please provide proof documents for the deal.');
+        return;
+      }
+    }
+    setStep(next);
+  };
+
   const handleSubmit = async () => {
+    if (profile?.role !== 'seller' && profile?.role !== 'admin') {
+      alert(language === 'vi' ? 'Chỉ Người bán mới có thể đăng Deal.' : 'Only Sellers can list deals.');
+      return;
+    }
+    if (profile?.kycStatus !== 'verified') {
+      alert(language === 'vi' ? 'Bạn cần hoàn tất xác minh KYC trước khi đăng bài.' : 'You must complete KYC verification before listing a deal.');
+      navigate('/kyc');
+      return;
+    }
+    if (!formData.title || !formData.industry || !formData.location || !formData.description) {
+      alert(language === 'vi' ? 'Vui lòng điền đầy đủ các thông tin bắt buộc.' : 'Please fill in all required fields.');
+      return;
+    }
     setLoading(true);
     try {
       const dealData = {
@@ -82,13 +121,19 @@ export default function SubmitDeal() {
         valuation: parseFloat(formData.valuation),
         equityOffered: parseFloat(formData.equityOffered),
         dealType: formData.dealType,
-        status: 'published', // For demo we publish immediately
+        status: 'submitted', // Change to submitted for moderation
         sellerId: user.uid,
         createdAt: new Date().toISOString(),
+        documents: documents.map(d => d.name), // Store file names for demo
         metrics: {
           revenue: parseFloat(formData.revenue),
           ebitda: parseFloat(formData.ebitda),
-          netProfit: parseFloat(formData.netProfit)
+          netProfit: parseFloat(formData.netProfit),
+          growthRate: parseFloat(formData.growthRate)
+        },
+        strategic: {
+          reasonForSale: formData.reasonForSale,
+          futurePlan: formData.futurePlan
         },
         visibility: formData.visibility
       };
@@ -167,7 +212,7 @@ export default function SubmitDeal() {
                   onChange={e => setFormData({...formData, description: e.target.value})}
                 />
               </div>
-              <Button className="w-full" onClick={() => setStep(2)}>{language === 'vi' ? 'Tiếp tục: Tài chính' : 'Continue to Financials'}</Button>
+              <Button className="w-full" onClick={() => handleNextStep(2)}>{language === 'vi' ? 'Tiếp tục: Tài chính' : 'Continue to Financials'}</Button>
             </div>
           </motion.div>
         )}
@@ -204,6 +249,15 @@ export default function SubmitDeal() {
                 />
               </div>
               <div>
+                <Label>{language === 'vi' ? 'Tốc độ tăng trưởng (%)' : 'Growth Rate (%)'}</Label>
+                <Input 
+                  type="number" 
+                  placeholder="15" 
+                  value={formData.growthRate}
+                  onChange={e => setFormData({...formData, growthRate: e.target.value})}
+                />
+              </div>
+              <div>
                 <Label>{t('submit.askValuation')}</Label>
                 <Input 
                   type="number" 
@@ -215,7 +269,7 @@ export default function SubmitDeal() {
             </div>
             <div className="flex gap-4">
               <Button variant="outline" className="flex-1" onClick={() => setStep(1)}>{t('submit.back')}</Button>
-              <Button className="flex-1" onClick={() => setStep(3)}>{language === 'vi' ? 'Tiếp tục: Chi tiết M&A' : 'Continue to M&A Details'}</Button>
+              <Button className="flex-1" onClick={() => handleNextStep(3)}>{language === 'vi' ? 'Tiếp tục: Chi tiết M&A' : 'Continue to M&A Details'}</Button>
             </div>
           </motion.div>
         )}
@@ -245,13 +299,57 @@ export default function SubmitDeal() {
                   onChange={e => setFormData({...formData, equityOffered: e.target.value})}
                 />
               </div>
-              <div className="p-4 bg-slate-50 rounded-xl flex gap-3 text-sm text-slate-500 border border-slate-100">
+              <div>
+                <Label>{language === 'vi' ? 'Lý do bán' : 'Reason for Sale'}</Label>
+                <textarea 
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg h-20"
+                  value={formData.reasonForSale}
+                  onChange={e => setFormData({...formData, reasonForSale: e.target.value})}
+                />
+              </div>
+              <div>
+                <Label>{language === 'vi' ? 'Kế hoạch tương lai' : 'Future Plans'}</Label>
+                <textarea 
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg h-20"
+                  value={formData.futurePlan}
+                  onChange={e => setFormData({...formData, futurePlan: e.target.value})}
+                />
+              </div>
+              <div className="p-4 bg-slate-50 rounded-xl flex gap-3 text-sm text-slate-500 border border-slate-100 mb-6">
                 <Info className="w-5 h-5 shrink-0 text-slate-900" />
                 {language === 'vi' 
                   ? 'Deal của bạn sẽ được đội ngũ tuân thủ của chúng tôi xem xét trước khi hiển thị cho người mua đã xác minh.' 
                   : 'Your deal will be reviewed by our compliance team before going live to verified buyers.'}
               </div>
             </div>
+            
+            <div className="space-y-6 mb-8 border-t border-slate-100 pt-6">
+              <div>
+                <Label>{language === 'vi' ? 'Tài liệu chứng minh (VD: BCTC, Giấy chứng nhận ĐKKD)' : 'Proof Documents (e.g., Financials, Business Reg.)'}</Label>
+                <div className="mt-2">
+                  <label className="relative group block p-6 border-2 border-dashed rounded-2xl transition-all cursor-pointer text-center border-slate-200 hover:border-slate-400">
+                    <input type="file" className="hidden" multiple accept=".pdf,.doc,.docx,.jpg,.png" onChange={e => {
+                      if (e.target.files) {
+                        setDocuments(Array.from(e.target.files));
+                      }
+                    }} />
+                    <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2 group-hover:text-slate-900" />
+                    <div className="text-sm font-bold text-slate-900">{language === 'vi' ? 'Tải lên tài liệu' : 'Upload Documents'}</div>
+                  </label>
+                  {documents.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      {documents.map((doc, idx) => (
+                        <div key={idx} className="flex items-center gap-2 text-sm text-slate-600 bg-slate-50 p-2 rounded-lg">
+                          <FileText className="w-4 h-4 text-slate-400" />
+                          <span>{doc.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            
             <div className="flex gap-4">
               <Button variant="outline" className="flex-1" onClick={() => setStep(2)}>{t('submit.back')}</Button>
               <Button className="flex-1" onClick={handleSubmit} disabled={loading}>
