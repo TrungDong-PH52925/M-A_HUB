@@ -9,7 +9,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { auth } from '../../lib/firebase';
 import { Button } from '../ui';
-import { LogOut, User, LayoutDashboard, Search, PlusCircle, Languages, Shield } from 'lucide-react';
+import { LogOut, User, LayoutDashboard, Search, PlusCircle, Languages, Shield, MessageSquare } from 'lucide-react';
 
 export function Navbar() {
   const { user, profile } = useAuth();
@@ -58,6 +58,12 @@ export function Navbar() {
                   <Button variant="ghost" size="sm" className="gap-2">
                     <LayoutDashboard className="w-4 h-4" />
                     {profile?.role === 'advisor' ? t('advisor.dashboard') : t('nav.dashboard')}
+                  </Button>
+                </Link>
+                <Link to="/messages">
+                  <Button variant="ghost" size="sm" className="gap-2">
+                    <MessageSquare className="w-4 h-4" />
+                    {language === 'vi' ? 'Tin nhắn' : 'Messages'}
                   </Button>
                 </Link>
                 {(profile?.role === 'admin' || user?.email === 'dongntph52925@gmail.com') && (

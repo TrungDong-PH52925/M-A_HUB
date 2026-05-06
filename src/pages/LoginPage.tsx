@@ -27,6 +27,7 @@ export default function LoginPage() {
   const [twoFactorRequired, setTwoFactorRequired] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  const [testEmailUrl, setTestEmailUrl] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const getAuthErrorMessage = (err: any) => {
@@ -124,7 +125,7 @@ export default function LoginPage() {
           uid: result.user.uid,
           name,
           email,
-          role: 'buyer',
+          role: role,
           kycStatus: 'pending',
           twoFactorEnabled: false,
           createdAt: new Date().toISOString(),
@@ -136,14 +137,41 @@ export default function LoginPage() {
         const userData = userDoc.data();
         
         if (userData?.twoFactorEnabled && !twoFactorRequired) {
-          setTwoFactorRequired(true);
-          setLoading(false);
+          setLoading(true);
+          try {
+            const res = await fetch('/api/auth/send-otp', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email })
+            });
+            const data = await res.json();
+            if (data.testUrl) {
+              setTestEmailUrl(data.testUrl);
+            }
+            setTwoFactorRequired(true);
+          } catch(e) {
+            setError('Failed to send OTP email.');
+          } finally {
+            setLoading(false);
+          }
           return;
         }
 
         if (twoFactorRequired) {
-          // Verify 2FA code (simulated logic for demo)
-          if (otp !== '123456') throw new Error(language === 'vi' ? 'Mã 2FA không hợp lệ. Gợi ý: Dùng 123456.' : 'Invalid 2FA code. Hint: Use 123456 for demo.');
+          setLoading(true);
+          try {
+            const res = await fetch('/api/auth/verify-otp', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, otp })
+            });
+            const data = await res.json();
+            if (!data.success) {
+              throw new Error(data.error || (language === 'vi' ? 'Mã 2FA không hợp lệ.' : 'Invalid 2FA code.'));
+            }
+          } catch(e: any) {
+            throw new Error(e.message || (language === 'vi' ? 'Mã 2FA không hợp lệ.' : 'Invalid 2FA code.'));
+          }
         }
 
         navigate('/dashboard');
@@ -180,7 +208,7 @@ export default function LoginPage() {
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="space-y-4 overflow-hidden"
+                  className="space-y-4"
                 >
                   <div>
                     <Label>{t('auth.fullName')}</Label>
@@ -190,6 +218,25 @@ export default function LoginPage() {
                       onChange={(e) => { setName(e.target.value); setError(null); }} 
                       required={isSignUp}
                     />
+                  </div>
+                  <div>
+                    <Label>{language === 'vi' ? 'Vai trò' : 'Role'}</Label>
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      <button 
+                        type="button"
+                        onClick={() => setRole('buyer')}
+                        className={`py-3 px-4 rounded-xl border-2 text-sm font-bold transition-all ${role === 'buyer' ? 'border-slate-900 bg-slate-50' : 'border-slate-200 text-slate-400 hover:border-slate-300'}`}
+                      >
+                        {language === 'vi' ? 'Người Mua / Đầu Tư' : 'Buyer / Investor'}
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => setRole('seller')}
+                        className={`py-3 px-4 rounded-xl border-2 text-sm font-bold transition-all ${role === 'seller' ? 'border-slate-900 bg-slate-50' : 'border-slate-200 text-slate-400 hover:border-slate-300'}`}
+                      >
+                        {language === 'vi' ? 'Người Bán / Doanh Nghiệp' : 'Seller / Business'}
+                      </button>
+                    </div>
                   </div>
                 </motion.div>
               )}
@@ -258,7 +305,7 @@ export default function LoginPage() {
             {twoFactorRequired && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 <Label>{t('auth.twoFactor')}</Label>
-                <div className="space-y-2">
+                <div className="space-y-2 mb-4">
                   <Input 
                     type="text" 
                     placeholder={t('auth.enterOtp')} 
@@ -268,6 +315,15 @@ export default function LoginPage() {
                     maxLength={6}
                     required
                   />
+                  {testEmailUrl && (
+                    <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-lg mt-2">
+                       <p className="font-bold mb-1">{language === 'vi' ? 'Chế độ Demo (Không dùng SendGrid thật)' : 'Demo Mode (No real SendGrid)'}</p>
+                       <p>{language === 'vi' ? 'Vui lòng nhấn vào liên kết bên dưới để xem email chứa mã 2FA:' : 'Please click the link below to view the email containing your 2FA code:'}</p>
+                       <a href={testEmailUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline font-medium block mt-1 break-all">
+                         {language === 'vi' ? 'Mở Hộp thư Demo' : 'Open Demo Mailbox'}
+                       </a>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             )}

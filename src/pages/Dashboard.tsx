@@ -129,7 +129,7 @@ export default function Dashboard() {
                         <h3 className="font-bold text-slate-900">{deal.title}</h3>
                         <div className="flex items-center gap-3 mt-1">
                           <span className="text-xs font-semibold px-2 py-0.5 bg-slate-100 text-slate-600 rounded">
-                            {deal.status.toUpperCase()}
+                            {deal.status.replace('_', ' ').toUpperCase()}
                           </span>
                           <span className="text-xs text-slate-400">
                             ${(deal.valuation / 1000000).toFixed(1)}M {t('dashboard.valuation')}

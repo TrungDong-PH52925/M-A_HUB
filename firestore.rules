@@ -46,7 +46,7 @@ service cloud.firestore {
       allow create: if isOwner(userId) && incoming().role != 'admin'; // Cannot self-promote to admin
       allow update: if (isOwner(userId) && (
         // Regular user can only update these
-        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'country', 'company', 'phoneNumber', 'twoFactorEnabled', 'kycStatus', 'kycData'])
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'country', 'company', 'phoneNumber', 'twoFactorEnabled', 'kycStatus', 'kycData', 'updatedAt'])
       )) || isAdmin();
     }
 
@@ -68,8 +68,22 @@ service cloud.firestore {
       allow update: if (isSignedIn() && existing().sellerId == request.auth.uid) || isAdmin();
     }
 
+    // --- General Chats ---
+    match /chats/{chatId} {
+      allow read, write: if isSignedIn() && (request.auth.uid in resource.data.participants || request.auth.uid in incoming().participants || isAdmin() || isAdvisor());
+    }
+    match /chats/{chatId}/messages/{messageId} {
+      allow read, write: if isSignedIn();
+    }
+    
     // --- Sub-collections ---
     match /deals/{dealId}/offers/{offerId} {
+      allow read, write: if isSignedIn();
+    }
+    match /deals/{dealId}/messages/{messageId} {
+      allow read, write: if isSignedIn();
+    }
+    match /deals/{dealId}/meetings/{meetingId} {
       allow read, write: if isSignedIn();
     }
     match /deals/{dealId}/ndas/{ndaId} {

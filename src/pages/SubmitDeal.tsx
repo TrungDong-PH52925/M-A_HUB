@@ -97,7 +97,7 @@ export default function SubmitDeal() {
     setStep(next);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (submitStatus: 'draft' | 'submitted') => {
     if (profile?.role !== 'seller' && profile?.role !== 'admin') {
       alert(language === 'vi' ? 'Chỉ Người bán mới có thể đăng Deal.' : 'Only Sellers can list deals.');
       return;
@@ -167,7 +167,7 @@ export default function SubmitDeal() {
         valuation: parseFloat(formData.valuation),
         equityOffered: parseFloat(formData.equityOffered),
         dealType: formData.dealType,
-        status: 'submitted', // Change to submitted for moderation
+        status: submitStatus, // draft or submitted
         sellerId: user.uid,
         createdAt: new Date().toISOString(),
         documents: documents.map(d => d.name), // Store file names for demo
@@ -399,8 +399,11 @@ export default function SubmitDeal() {
             
             <div className="flex gap-4">
               <Button variant="outline" className="flex-1" onClick={() => setStep(2)}>{t('submit.back')}</Button>
-              <Button className="flex-1" onClick={handleSubmit} disabled={loading}>
-                {loading ? '...' : t('submit.publish')}
+              <Button variant="outline" className="flex-1" onClick={() => handleSubmit('draft')} disabled={loading}>
+                {loading ? '...' : (language === 'vi' ? 'Lưu Bản nháp' : 'Save Draft')}
+              </Button>
+              <Button className="flex-1" onClick={() => handleSubmit('submitted')} disabled={loading}>
+                {loading ? '...' : (language === 'vi' ? 'Nộp để Duyệt' : 'Submit for Review')}
               </Button>
             </div>
           </motion.div>

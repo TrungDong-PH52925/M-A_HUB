@@ -19,11 +19,26 @@ export default function ProfilePage() {
   
   const [formData, setFormData] = useState({
     name: profile?.name || '',
-    phone: profile?.phoneNumber || '',
+    phoneNumber: profile?.phoneNumber || '',
     company: profile?.company || '',
   });
 
   const [twoFactor, setTwoFactor] = useState(profile?.twoFactorEnabled || false);
+
+  const handleToggle2FA = async () => {
+    const newValue = !twoFactor;
+    setTwoFactor(newValue);
+    if (!user) return;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        twoFactorEnabled: newValue,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error('Update 2FA failed:', error);
+      setTwoFactor(!newValue); // revert
+    }
+  };
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,8 +104,8 @@ export default function ProfilePage() {
                     <Input 
                       className="pl-10" 
                       placeholder="+84 ..." 
-                      value={formData.phone} 
-                      onChange={e => setFormData({...formData, phone: e.target.value})} 
+                      value={formData.phoneNumber} 
+                      onChange={e => setFormData({...formData, phoneNumber: e.target.value})} 
                     />
                   </div>
                 </div>
@@ -134,7 +149,7 @@ export default function ProfilePage() {
                 <p className="text-sm text-slate-500 max-w-md mt-1">{t('profile.twoFactorDesc')}</p>
               </div>
               <button 
-                onClick={() => setTwoFactor(!twoFactor)}
+                onClick={handleToggle2FA}
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${twoFactor ? 'bg-slate-900' : 'bg-slate-200'}`}
               >
                 <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${twoFactor ? 'translate-x-6' : 'translate-x-1'}`} />

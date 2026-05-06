@@ -6,7 +6,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
-import { collection, query, getDocs, updateDoc, doc, where } from 'firebase/firestore';
+import { collection, query, getDocs, updateDoc, doc, where, addDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { handleFirestoreError, OperationType } from '../lib/firestoreErrors';
 import { Card, Button } from '../components/ui';
@@ -18,7 +18,8 @@ import {
   CheckCircle2, 
   XCircle, 
   Eye,
-  AlertTriangle
+  AlertTriangle,
+  MessageSquare
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
@@ -35,6 +36,8 @@ export default function AdminDashboard() {
   const [expandedDeal, setExpandedDeal] = useState<string | null>(null);
   const [deals, setDeals] = useState<any[]>([]);
   const [allDeals, setAllDeals] = useState<any[]>([]);
+  const [activeDealTab, setActiveDealTab] = useState<'pending' | 'all'>('pending');
+  const [dealStatusUpdates, setDealStatusUpdates] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -134,9 +137,9 @@ export default function AdminDashboard() {
   const handleApproveKYC = async (userId: string) => {
     const path = `users/${userId}`;
     try {
-      await updateDoc(doc(db, 'users', userId), { kycStatus: 'verified', role: 'seller' });
+      await updateDoc(doc(db, 'users', userId), { kycStatus: 'verified' });
       setUsers(users.filter(u => u.id !== userId));
-      setAllUsers(allUsers.map(u => u.id === userId ? { ...u, kycStatus: 'verified', role: 'seller' } : u));
+      setAllUsers(allUsers.map(u => u.id === userId ? { ...u, kycStatus: 'verified' } : u));
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, path);
     }
@@ -153,26 +156,31 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleApproveDeal = async (dealId: string) => {
+  const handleUpdateDealStatus = async (dealId: string, newStatus: string) => {
     const path = `deals/${dealId}`;
     try {
-      await updateDoc(doc(db, 'deals', dealId), { status: 'published' });
+      await updateDoc(doc(db, 'deals', dealId), { status: newStatus });
+      setAllDeals(allDeals.map(d => d.id === dealId ? { ...d, status: newStatus } : d));
+      if (newStatus === 'under_review' || newStatus === 'approved' || newStatus === 'published' || newStatus === 'in_negotiation' || newStatus === 'closed' || newStatus === 'rejected') {
+         // remove from pending if it's no longer submitted, or add it if it reverted
+      }
       setDeals(deals.filter(d => d.id !== dealId));
-      setAllDeals(allDeals.map(d => d.id === dealId ? { ...d, status: 'published' } : d));
+      setDealStatusUpdates(prev => {
+        const next = { ...prev };
+        delete next[dealId];
+        return next;
+      });
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, path);
     }
   };
 
+  const handleApproveDeal = async (dealId: string) => {
+    await handleUpdateDealStatus(dealId, 'published');
+  };
+
   const handleRejectDeal = async (dealId: string) => {
-    const path = `deals/${dealId}`;
-    try {
-      await updateDoc(doc(db, 'deals', dealId), { status: 'rejected' });
-      setDeals(deals.filter(d => d.id !== dealId));
-      setAllDeals(allDeals.map(d => d.id === dealId ? { ...d, status: 'rejected' } : d));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, path);
-    }
+    await handleUpdateDealStatus(dealId, 'rejected');
   };
 
   if (profile?.role !== 'admin' && user?.email !== 'dongntph52925@gmail.com') return null;
@@ -188,6 +196,28 @@ export default function AdminDashboard() {
     return `$${value.toLocaleString()}`;
   };
   const formattedTotalVolume = formatCurrency(totalVolume);
+
+  const handleMessageUser = async (targetUserId: string) => {
+    if (!user) return;
+    try {
+      const d1 = await getDocs(query(collection(db, 'chats'), where('participants', '==', [user.uid, targetUserId])));
+      const d2 = await getDocs(query(collection(db, 'chats'), where('participants', '==', [targetUserId, user.uid])));
+      
+      let chatId = '';
+      if (!d1.empty) chatId = d1.docs[0].id;
+      else if (!d2.empty) chatId = d2.docs[0].id;
+      
+      if (!chatId) {
+        await addDoc(collection(db, 'chats'), {
+          participants: [user.uid, targetUserId],
+          updatedAt: new Date().toISOString()
+        });
+      }
+      navigate('/messages');
+    } catch (err) {
+      console.error("Error creating chat:", err);
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-24">
@@ -367,6 +397,9 @@ export default function AdminDashboard() {
                         KYC: {user.kycStatus}
                       </span>
                     </div>
+                    <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleMessageUser(user.id); }} className="h-8 w-8 p-0 ml-2 mt-auto mb-auto" title="Message User">
+                      <MessageSquare className="w-4 h-4 text-slate-400 hover:text-indigo-600" />
+                    </Button>
                   </div>
                 </Card>
               )) : (
@@ -384,13 +417,25 @@ export default function AdminDashboard() {
             <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
               <FileCheck className="w-5 h-5" /> {t('admin.manageDeals')}
             </h2>
-            <span className="px-2 py-1 bg-blue-100 text-blue-600 text-[10px] font-black uppercase rounded-lg">
-              {deals.length} New
-            </span>
+            <div className="flex bg-slate-100 rounded-lg p-1">
+              <button
+                className={`text-xs px-3 py-1.5 rounded-md font-bold transition-colors ${activeDealTab === 'pending' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                onClick={() => setActiveDealTab('pending')}
+              >
+                Pending ({deals.length})
+              </button>
+              <button
+                className={`text-xs px-3 py-1.5 rounded-md font-bold transition-colors ${activeDealTab === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                onClick={() => setActiveDealTab('all')}
+              >
+                All Deals ({allDeals.length})
+              </button>
+            </div>
           </div>
 
           <div className="space-y-4">
-            {deals.length > 0 ? deals.map((deal) => (
+            {activeDealTab === 'pending' ? (
+            deals.length > 0 ? deals.map((deal) => (
               <Card key={deal.id} className="p-6">
                 <div className="flex items-center justify-between gap-4 cursor-pointer" onClick={() => setExpandedDeal(expandedDeal === deal.id ? null : deal.id)}>
                   <div className="flex-1">
@@ -408,8 +453,11 @@ export default function AdminDashboard() {
                     <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-600 hover:bg-red-50" onClick={(e) => { e.stopPropagation(); handleRejectDeal(deal.id); }}>
                       <XCircle className="w-4 h-4" />
                     </Button>
+                    <Button size="sm" onClick={(e) => { e.stopPropagation(); handleUpdateDealStatus(deal.id, 'under_review'); }} className="bg-blue-600 hover:bg-blue-700">
+                      Under Review
+                    </Button>
                     <Button size="sm" onClick={(e) => { e.stopPropagation(); handleApproveDeal(deal.id); }} className="bg-slate-900">
-                      <CheckCircle2 className="w-4 h-4 mr-2" /> {language === 'vi' ? 'Duyệt' : 'Approve'}
+                      <CheckCircle2 className="w-4 h-4 mr-2" /> {language === 'vi' ? 'Duyệt (Publish)' : 'Approve (Publish)'}
                     </Button>
                   </div>
                 </div>
@@ -460,6 +508,58 @@ export default function AdminDashboard() {
               <div className="text-center py-12 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
                 <p className="text-slate-400">No deals pending moderation</p>
               </div>
+            )
+            ) : (
+              allDeals.length > 0 ? allDeals.map((deal) => (
+                <Card key={deal.id} className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <h3 className="font-bold text-slate-900 text-sm">{deal.title}</h3>
+                      <p className="text-xs text-slate-500 mt-1 uppercase font-bold tracking-wider">{deal.industry} • ${(deal.valuation / 1000000).toFixed(1)}M Val</p>
+                    </div>
+                    <div className="flex items-center gap-2 relative">
+                      <div className="flex items-center gap-1">
+                        <select 
+                          value={dealStatusUpdates[deal.id] || deal.status} 
+                          onChange={(e) => setDealStatusUpdates({ ...dealStatusUpdates, [deal.id]: e.target.value })}
+                          className={`px-2 py-1 rounded text-xs font-bold outline-none border cursor-pointer border-slate-200 hover:border-slate-300 bg-slate-50`}
+                        >
+                          <option value="draft">Draft</option>
+                          <option value="submitted">Submitted</option>
+                          <option value="under_review">Under Review</option>
+                          <option value="approved">Approved</option>
+                          <option value="published">Published</option>
+                          <option value="in_negotiation">In Negotiation</option>
+                          <option value="closed">Closed</option>
+                          <option value="rejected">Rejected</option>
+                        </select>
+                        {(dealStatusUpdates[deal.id] && dealStatusUpdates[deal.id] !== deal.status) && (
+                          <button
+                            onClick={() => handleUpdateDealStatus(deal.id, dealStatusUpdates[deal.id])}
+                            className="bg-green-500 hover:bg-green-600 text-white rounded p-1 flex items-center justify-center transition-colors shadow-sm"
+                            title="Confirm Status Change"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => setExpandedDeal(expandedDeal === deal.id ? null : deal.id)} className="h-8 w-8 p-0 ml-2">
+                        <Eye className="w-4 h-4 text-slate-400" />
+                      </Button>
+                    </div>
+                  </div>
+                  {expandedDeal === deal.id && (
+                    <div className="pt-4 mt-4 border-t border-slate-100 text-xs">
+                       <p><span className="text-slate-400 font-bold">Seller ID:</span> {deal.sellerId}</p>
+                       <p className="mt-1"><span className="text-slate-400 font-bold">Created At:</span> {deal.createdAt}</p>
+                    </div>
+                  )}
+                </Card>
+              )) : (
+                <div className="text-center py-12 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
+                  <p className="text-slate-400">No deals found</p>
+                </div>
+              )
             )}
           </div>
         </section>

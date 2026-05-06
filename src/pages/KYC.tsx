@@ -84,10 +84,19 @@ export default function KYCPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!idFront || !idBack || !selfie || !companyData.legalName || !companyData.taxId) {
+    const isBuyer = profile?.role === 'buyer';
+
+    if (!idFront || !idBack || !selfie) {
       alert(language === 'vi' 
-        ? 'Vui lòng hoàn tất tất cả các bước xác minh.' 
-        : 'Please complete all verification steps.');
+        ? 'Vui lòng hoàn tất tất cả các bước xác minh nhận diện.' 
+        : 'Please complete all identity verification steps.');
+      return;
+    }
+
+    if (!isBuyer && (!companyData.legalName || !companyData.taxId)) {
+      alert(language === 'vi' 
+        ? 'Vui lòng điền thông tin doanh nghiệp.' 
+        : 'Please complete company data.');
       return;
     }
     
@@ -135,19 +144,23 @@ export default function KYCPage() {
       const idFrontData = await resizeImage(idFront);
       const idBackData = await resizeImage(idBack);
 
+      const kycPayload: any = {
+        idFrontName: idFront.name,
+        idBackName: idBack.name,
+        idFrontData,
+        idBackData,
+        selfieData: selfie,
+        verifiedAt: new Date().toISOString(),
+      };
+
+      if (!isBuyer) {
+        Object.assign(kycPayload, companyData);
+      }
+
       await updateDoc(doc(db, 'users', user.uid), {
         kycStatus: 'pending',
-        company: companyData.legalName,
-        country: companyData.country,
-        kycData: {
-          ...companyData,
-          idFrontName: idFront.name,
-          idBackName: idBack.name,
-          idFrontData,
-          idBackData,
-          selfieData: selfie, // Selfie is already a base64 string
-          verifiedAt: new Date().toISOString(),
-        }
+        ...( !isBuyer ? { company: companyData.legalName, country: companyData.country } : {} ),
+        kycData: kycPayload
       });
       setSubmitted(true);
       setTimeout(() => navigate('/dashboard'), 2000);
@@ -182,7 +195,8 @@ export default function KYCPage() {
         <p className="text-slate-500 mt-2">{t('kyc.subtitle')}</p>
       </div>
 
-      {/* Steps Indicator */}
+      {/* Steps Indicator - Hidden for Buyers */}
+      {profile?.role !== 'buyer' && (
       <div className="flex items-center justify-center gap-4 mb-12 max-w-xl mx-auto">
         {[1, 2, 3].map((s) => (
           <div key={s} className="flex-1 flex items-center gap-2">
@@ -195,6 +209,7 @@ export default function KYCPage() {
           </div>
         ))}
       </div>
+      )}
 
       <Card className="p-8">
         <form onSubmit={handleSubmit} className="space-y-10">
@@ -305,9 +320,15 @@ export default function KYCPage() {
                 </section>
                 
                 <div className="pt-6 border-t border-slate-100">
-                  <Button type="button" className="w-full h-14" onClick={() => setStep(2)} disabled={!idFront || !idBack || !selfie}>
-                    {language === 'vi' ? 'Tiếp tục: Hồ sơ doanh nghiệp' : 'Continue: Company Profile'}
-                  </Button>
+                  {profile?.role === 'buyer' ? (
+                    <Button type="submit" className="w-full h-14" disabled={!idFront || !idBack || !selfie || loading}>
+                      {loading ? '...' : (language === 'vi' ? 'Gửi xác minh' : 'Submit Verification')}
+                    </Button>
+                  ) : (
+                    <Button type="button" className="w-full h-14" onClick={() => setStep(2)} disabled={!idFront || !idBack || !selfie}>
+                      {language === 'vi' ? 'Tiếp tục: Hồ sơ doanh nghiệp' : 'Continue: Company Profile'}
+                    </Button>
+                  )}
                 </div>
               </motion.div>
             )}
