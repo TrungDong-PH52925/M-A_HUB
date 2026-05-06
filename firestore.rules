@@ -44,12 +44,10 @@ service cloud.firestore {
       allow get: if isSignedIn();
       allow list: if isAdmin(); 
       allow create: if isOwner(userId) && incoming().role != 'admin'; // Cannot self-promote to admin
-      allow update: if isOwner(userId) && (
+      allow update: if (isOwner(userId) && (
         // Regular user can only update these
-        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'country', 'company', 'phoneNumber', 'twoFactorEnabled']) ||
-        // Admin can update everything (role, kycStatus)
-        isAdmin()
-      );
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'country', 'company', 'phoneNumber', 'twoFactorEnabled', 'kycStatus', 'kycData'])
+      )) || isAdmin();
     }
 
     // --- Companies ---

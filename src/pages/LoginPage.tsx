@@ -4,8 +4,8 @@
  */
 
 import React, { useState } from 'react';
-import { signInWithPopup, GoogleAuthProvider, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { signInWithPopup, GoogleAuthProvider, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, fetchSignInMethodsForEmail } from 'firebase/auth';
+import { doc, setDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { Button, Card, Input, Label } from '../components/ui';
 import { useNavigate } from 'react-router-dom';
@@ -22,71 +22,57 @@ export default function LoginPage() {
   const [role, setRole] = useState<'buyer' | 'seller' | 'advisor'>('buyer');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showOtp, setShowOtp] = useState(false);
   const [otp, setOtp] = useState('');
   const [tempUser, setTempUser] = useState<any>(null);
   const [twoFactorRequired, setTwoFactorRequired] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
   const navigate = useNavigate();
 
-  const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.includes('@')) {
-      setError(language === 'vi' ? 'Email không hợp lệ.' : 'Invalid email address.');
-      return;
-    }
-    if (isSignUp && password.length < 6) {
-      setError(language === 'vi' ? 'Mật khẩu phải có ít nhất 6 ký tự.' : 'Password must be at least 6 characters.');
-      return;
-    }
-    if (isSignUp && !name) {
-      setError(language === 'vi' ? 'Vui lòng nhập họ tên.' : 'Please enter your full name.');
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      // Simulate/Trigger OTP sending via server
-      const res = await fetch('/api/auth/send-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-      if (!res.ok) throw new Error('Failed to send OTP');
-      setShowOtp(true);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+  const getAuthErrorMessage = (err: any) => {
+    if (err.code === 'auth/user-not-found') return language === 'vi' ? 'Tài khoản chưa tồn tại hoặc sai email.' : 'Account does not exist or wrong email.';
+    if (err.code === 'auth/wrong-password') return language === 'vi' ? 'Sai mật khẩu.' : 'Incorrect password.';
+    if (err.code === 'auth/invalid-credential') return language === 'vi' ? 'Tài khoản không tồn tại hoặc thông tin không chính xác. Vui lòng đăng ký nếu chưa có tài khoản.' : 'Account not found or incorrect credential. Please sign up if you do not have an account.';
+    if (err.code === 'auth/email-already-in-use') return language === 'vi' ? 'Email này đã được sử dụng.' : 'This email is already in use.';
+    if (err.code === 'auth/operation-not-allowed') return language === 'vi' ? 'Phương thức đăng nhập này chưa được kích hoạt. Bạn cần vào Firebase Console -> Authentication -> Sign-in method để bật Email/Password.' : 'This sign-in method is disabled. Please enable Email/Password in Firebase Console -> Authentication -> Sign-in method.';
+    if (err.code === 'auth/popup-closed-by-user') return language === 'vi' ? 'Cửa sổ đăng nhập đã bị đóng. Vui lòng thử lại.' : 'Login popup was closed. Please try again.';
+    
+    // Default error
+    return err.message || (language === 'vi' ? 'Đã xảy ra lỗi không xác định.' : 'An unknown error occurred.');
   };
 
-  const handleVerifyOtpAndSignUp = async (e: React.FormEvent) => {
+  const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email) {
+      setError(language === 'vi' ? 'Vui lòng nhập email.' : 'Please enter your email.');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/auth/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, otp }),
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error || 'Invalid OTP');
+      try {
+        const methods = await fetchSignInMethodsForEmail(auth, email);
+        if (methods.length === 0) {
+          throw new Error(language === 'vi' ? 'Email này chưa được đăng ký trong hệ thống.' : 'This email is not registered in the system.');
+        }
+      } catch (checkErr: any) {
+        // fetchSignInMethodsForEmail might fail if enumeration protection is enabled.
+        if (checkErr.code === 'auth/user-not-found') {
+          throw new Error(language === 'vi' ? 'Email này chưa được đăng ký trong hệ thống.' : 'This email is not registered in the system.');
+        }
+        if (checkErr.message && (checkErr.message.includes('not registered') || checkErr.message.includes('không được đăng ký') || checkErr.message.includes('chưa được đăng ký'))) {
+          throw checkErr;
+        }
+      }
 
-      // Proceed with actual Firebase Signup
-      const result = await createUserWithEmailAndPassword(auth, email, password);
-      await setDoc(doc(db, 'users', result.user.uid), {
-        uid: result.user.uid,
-        name,
-        email,
-        role,
-        kycStatus: 'pending',
-        twoFactorEnabled: false,
-        createdAt: new Date().toISOString(),
-      });
-      navigate('/dashboard');
+      await sendPasswordResetEmail(auth, email);
+      setResetSent(true);
     } catch (err: any) {
-      setError(err.message);
+      if (err.code === 'auth/user-not-found') {
+        setError(language === 'vi' ? 'Email này chưa được đăng ký trong hệ thống.' : 'This email is not registered in the system.');
+      } else {
+        setError(getAuthErrorMessage(err));
+      }
     } finally {
       setLoading(false);
     }
@@ -113,11 +99,7 @@ export default function LoginPage() {
       }
       navigate('/dashboard');
     } catch (err: any) {
-      if (err.code === 'auth/popup-closed-by-user') {
-        setError('Cửa sổ đăng nhập đã bị đóng. Vui lòng thử lại.');
-      } else {
-        setError(err.message);
-      }
+      setError(getAuthErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -125,15 +107,29 @@ export default function LoginPage() {
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSignUp && !showOtp) {
-      return handleSendOtp(e);
-    }
     
     setLoading(true);
     setError(null);
     try {
       if (isSignUp) {
-        return handleVerifyOtpAndSignUp(e);
+        if (password.length < 6) {
+          throw new Error(language === 'vi' ? 'Mật khẩu phải có ít nhất 6 ký tự.' : 'Password must be at least 6 characters.');
+        }
+        if (!name) {
+          throw new Error(language === 'vi' ? 'Vui lòng nhập họ tên.' : 'Please enter your full name.');
+        }
+
+        const result = await createUserWithEmailAndPassword(auth, email, password);
+        await setDoc(doc(db, 'users', result.user.uid), {
+          uid: result.user.uid,
+          name,
+          email,
+          role: 'buyer',
+          kycStatus: 'pending',
+          twoFactorEnabled: false,
+          createdAt: new Date().toISOString(),
+        });
+        navigate('/dashboard');
       } else {
         const result = await signInWithEmailAndPassword(auth, email, password);
         const userDoc = await getDoc(doc(db, 'users', result.user.uid));
@@ -147,13 +143,13 @@ export default function LoginPage() {
 
         if (twoFactorRequired) {
           // Verify 2FA code (simulated logic for demo)
-          if (otp !== '123456') throw new Error('Invalid 2FA code. Hint: Use 123456 for demo.');
+          if (otp !== '123456') throw new Error(language === 'vi' ? 'Mã 2FA không hợp lệ. Gợi ý: Dùng 123456.' : 'Invalid 2FA code. Hint: Use 123456 for demo.');
         }
 
         navigate('/dashboard');
       }
     } catch (err: any) {
-      setError(err.message);
+      setError(getAuthErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -178,7 +174,7 @@ export default function LoginPage() {
         <Card className="p-8">
           <form onSubmit={handleEmailAuth} className="space-y-4">
             <AnimatePresence mode="wait">
-              {isSignUp && !showOtp && (
+              {isSignUp && (
                 <motion.div
                   key="signup-fields"
                   initial={{ opacity: 0, height: 0 }}
@@ -191,34 +187,15 @@ export default function LoginPage() {
                     <Input 
                       placeholder="Jane Doe" 
                       value={name} 
-                      onChange={(e) => setName(e.target.value)} 
+                      onChange={(e) => { setName(e.target.value); setError(null); }} 
                       required={isSignUp}
                     />
-                  </div>
-                  <div>
-                    <Label>{t('auth.iam')}</Label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {(['buyer', 'seller', 'advisor'] as const).map((r) => (
-                        <button
-                          key={r}
-                          type="button"
-                          onClick={() => setRole(r)}
-                          className={`px-3 py-2 text-xs font-semibold rounded-lg border transition-all ${
-                            role === r 
-                              ? 'bg-slate-900 text-white border-slate-900 shadow-sm' 
-                              : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
-                          }`}
-                        >
-                          {r.charAt(0).toUpperCase() + r.slice(1)}
-                        </button>
-                      ))}
-                    </div>
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
 
-            {!showOtp && !twoFactorRequired && (
+            {!twoFactorRequired && !showForgotPassword && (
               <>
                 <div>
                   <Label>{t('auth.email')}</Label>
@@ -226,26 +203,61 @@ export default function LoginPage() {
                     type="email" 
                     placeholder="you@example.com" 
                     value={email} 
-                    onChange={(e) => setEmail(e.target.value)} 
+                    onChange={(e) => { setEmail(e.target.value); setError(null); }} 
                     required
                   />
                 </div>
                 <div>
-                  <Label>{t('auth.password')}</Label>
+                  <div className="flex items-center justify-between">
+                    <Label>{t('auth.password')}</Label>
+                    {!isSignUp && (
+                      <button 
+                        type="button" 
+                        onClick={() => { setShowForgotPassword(true); setError(null); setResetSent(false); }} 
+                        className="text-xs text-slate-500 hover:text-slate-900 font-medium"
+                      >
+                        {language === 'vi' ? 'Quên mật khẩu?' : 'Forgot password?'}
+                      </button>
+                    )}
+                  </div>
                   <Input 
                     type="password" 
                     placeholder="••••••••" 
                     value={password} 
-                    onChange={(e) => setPassword(e.target.value)} 
+                    onChange={(e) => { setPassword(e.target.value); setError(null); }} 
                     required
                   />
                 </div>
               </>
             )}
 
-            {(showOtp || twoFactorRequired) && (
+            {showForgotPassword && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <Label>{showOtp ? t('auth.confirmOtp') : t('auth.twoFactor')}</Label>
+                <Label>{language === 'vi' ? 'Đặt lại mật khẩu' : 'Reset Password'}</Label>
+                <div className="space-y-4 mt-2">
+                  <p className="text-sm text-slate-500">
+                    {language === 'vi' ? 'Nhập email của bạn để nhận liên kết đặt lại mật khẩu.' : 'Enter your email to receive a password reset link.'}
+                  </p>
+                  <Input 
+                    type="email" 
+                    placeholder="you@example.com" 
+                    value={email} 
+                    onChange={(e) => setEmail(e.target.value)} 
+                    required
+                  />
+                  {resetSent && (
+                    <div className="p-3 bg-green-50 text-green-700 text-xs rounded-lg flex gap-2 items-center">
+                      <ShieldCheck className="w-4 h-4 shrink-0" />
+                      {language === 'vi' ? 'Liên kết đã được gửi! Kiểm tra email của bạn.' : 'Link sent! Check your email.'}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+
+            {twoFactorRequired && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                <Label>{t('auth.twoFactor')}</Label>
                 <div className="space-y-2">
                   <Input 
                     type="text" 
@@ -256,9 +268,6 @@ export default function LoginPage() {
                     maxLength={6}
                     required
                   />
-                  {showOtp && (
-                    <p className="text-[10px] text-slate-400 font-medium">{t('auth.otpSent')}</p>
-                  )}
                 </div>
               </motion.div>
             )}
@@ -270,19 +279,20 @@ export default function LoginPage() {
               </div>
             )}
 
-            <Button className="w-full" disabled={loading}>
+            <Button className="w-full" disabled={loading} onClick={showForgotPassword ? handleForgotPassword : undefined} type={showForgotPassword ? "button" : "submit"}>
               {loading ? 'Processing...' : (
-                showOtp ? t('auth.confirmOtp') : 
+                showForgotPassword ? (language === 'vi' ? 'Gửi liên kết' : 'Send Link') :
                 twoFactorRequired ? t('auth.signIn') :
                 (isSignUp ? t('auth.signUp') : t('auth.signIn'))
               )}
             </Button>
             
-            {(showOtp || twoFactorRequired) && (
+            {(twoFactorRequired || showForgotPassword) && (
               <Button 
                 variant="ghost" 
                 className="w-full text-xs" 
-                onClick={() => { setShowOtp(false); setTwoFactorRequired(false); setOtp(''); }}
+                onClick={() => { setTwoFactorRequired(false); setShowForgotPassword(false); setOtp(''); }}
+                type="button"
               >
                 Back
               </Button>
@@ -308,7 +318,7 @@ export default function LoginPage() {
           <p className="mt-8 text-center text-sm text-slate-500">
             {isSignUp ? t('auth.alreadyAccount') : t('auth.noAccount')}{' '}
             <button 
-              onClick={() => setIsSignUp(!isSignUp)}
+              onClick={() => { setIsSignUp(!isSignUp); setError(null); }}
               className="text-slate-900 font-semibold hover:underline"
             >
               {isSignUp ? t('auth.signIn') : t('auth.signUp')}

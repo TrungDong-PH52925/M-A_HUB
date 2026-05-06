@@ -30,6 +30,7 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState<any[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [activeUserTab, setActiveUserTab] = useState<'pending' | 'all'>('pending');
+  const [roleUpdates, setRoleUpdates] = useState<Record<string, string>>({});
   const [expandedKyc, setExpandedKyc] = useState<string | null>(null);
   const [expandedDeal, setExpandedDeal] = useState<string | null>(null);
   const [deals, setDeals] = useState<any[]>([]);
@@ -55,7 +56,16 @@ export default function AdminDashboard() {
           handleFirestoreError(err, OperationType.LIST, usersPath);
           return;
         }
-        setUsers(usersSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        
+        // Deduplicate by email (take latest/most complete if possible, simple approach: first seen)
+        const pendingMap = new Map();
+        usersSnap.docs.forEach(d => {
+          const data = { id: d.id, ...d.data() } as any;
+          if (!pendingMap.has(data.email) || data.kycData) {
+            pendingMap.set(data.email, data);
+          }
+        });
+        setUsers(Array.from(pendingMap.values()));
 
         // Fetch all users
         let allUsersSnap;
@@ -65,7 +75,15 @@ export default function AdminDashboard() {
           handleFirestoreError(err, OperationType.LIST, usersPath);
           return;
         }
-        setAllUsers(allUsersSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        
+        const allMap = new Map();
+        allUsersSnap.docs.forEach(d => {
+          const data = { id: d.id, ...d.data() } as any;
+          if (!allMap.has(data.email) || data.kycStatus === 'verified' || data.kycData) {
+             allMap.set(data.email, data);
+          }
+        });
+        setAllUsers(Array.from(allMap.values()));
 
         // Fetch deals under review
         const dealsPath = 'deals';
@@ -97,11 +115,39 @@ export default function AdminDashboard() {
     fetchAdminData();
   }, [profile, navigate]);
 
+  const handleUpdateRole = async (userId: string, newRole: string) => {
+    const path = `users/${userId}`;
+    try {
+      await updateDoc(doc(db, 'users', userId), { role: newRole });
+      setAllUsers(allUsers.map(u => u.id === userId ? { ...u, role: newRole } : u));
+      setUsers(users.map(u => u.id === userId ? { ...u, role: newRole } : u));
+      setRoleUpdates(prev => {
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, path);
+    }
+  };
+
   const handleApproveKYC = async (userId: string) => {
     const path = `users/${userId}`;
     try {
-      await updateDoc(doc(db, 'users', userId), { kycStatus: 'verified' });
+      await updateDoc(doc(db, 'users', userId), { kycStatus: 'verified', role: 'seller' });
       setUsers(users.filter(u => u.id !== userId));
+      setAllUsers(allUsers.map(u => u.id === userId ? { ...u, kycStatus: 'verified', role: 'seller' } : u));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, path);
+    }
+  };
+
+  const handleRejectKYC = async (userId: string) => {
+    const path = `users/${userId}`;
+    try {
+      await updateDoc(doc(db, 'users', userId), { kycStatus: 'rejected' });
+      setUsers(users.filter(u => u.id !== userId));
+      setAllUsers(allUsers.map(u => u.id === userId ? { ...u, kycStatus: 'rejected' } : u));
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, path);
     }
@@ -112,6 +158,18 @@ export default function AdminDashboard() {
     try {
       await updateDoc(doc(db, 'deals', dealId), { status: 'published' });
       setDeals(deals.filter(d => d.id !== dealId));
+      setAllDeals(allDeals.map(d => d.id === dealId ? { ...d, status: 'published' } : d));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, path);
+    }
+  };
+
+  const handleRejectDeal = async (dealId: string) => {
+    const path = `deals/${dealId}`;
+    try {
+      await updateDoc(doc(db, 'deals', dealId), { status: 'rejected' });
+      setDeals(deals.filter(d => d.id !== dealId));
+      setAllDeals(allDeals.map(d => d.id === dealId ? { ...d, status: 'rejected' } : d));
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, path);
     }
@@ -200,7 +258,7 @@ export default function AdminDashboard() {
                       <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setExpandedKyc(expandedKyc === user.id ? null : user.id); }}>
                         {expandedKyc === user.id ? (language === 'vi' ? 'Đóng' : 'Close') : (language === 'vi' ? 'Xem tài liệu' : 'View Docs')}
                       </Button>
-                      <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-600 hover:bg-red-50" onClick={(e) => e.stopPropagation()}>
+                      <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-600 hover:bg-red-50" onClick={(e) => { e.stopPropagation(); handleRejectKYC(user.id); }}>
                         <XCircle className="w-4 h-4" />
                       </Button>
                       <Button size="sm" onClick={(e) => { e.stopPropagation(); handleApproveKYC(user.id); }} className="bg-green-600 hover:bg-green-700">
@@ -209,7 +267,8 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                   
-                  {expandedKyc === user.id && user.kycData && (
+                  {expandedKyc === user.id && (
+                    user.kycData ? (
                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="pt-6 mt-6 border-t border-slate-100 text-sm">
                       <div className="grid grid-cols-2 gap-4">
                         <div>
@@ -221,15 +280,44 @@ export default function AdminDashboard() {
                           <p className="font-bold">{user.kycData.taxId}</p>
                         </div>
                         <div className="col-span-2">
-                          <p className="text-slate-400 font-medium mb-2">Submitted Documents</p>
-                          <div className="flex gap-2">
-                            <span className="px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-md text-xs font-medium">✓ {user.kycData.idFrontName || 'ID Front'}</span>
-                            <span className="px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-md text-xs font-medium">✓ {user.kycData.idBackName || 'ID Back'}</span>
-                            <span className="px-3 py-1 bg-green-50 text-green-700 border border-green-200 rounded-md text-xs font-medium">✓ Selfie Match</span>
+                          <p className="text-slate-400 font-medium mb-3">Submitted Documents (Images)</p>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            {user.kycData.idFrontData && (
+                              <div className="border border-slate-200 rounded-lg overflow-hidden">
+                                <div className="bg-slate-50 px-3 py-2 text-xs font-bold text-slate-500 border-b border-slate-100">ID Front</div>
+                                <img src={user.kycData.idFrontData} alt="ID Front" className="w-full object-cover max-h-48" />
+                              </div>
+                            )}
+                            {user.kycData.idBackData && (
+                              <div className="border border-slate-200 rounded-lg overflow-hidden">
+                                <div className="bg-slate-50 px-3 py-2 text-xs font-bold text-slate-500 border-b border-slate-100">ID Back</div>
+                                <img src={user.kycData.idBackData} alt="ID Back" className="w-full object-cover max-h-48" />
+                              </div>
+                            )}
+                            {user.kycData.selfieData && (
+                              <div className="border border-slate-200 rounded-lg overflow-hidden">
+                                <div className="bg-slate-50 px-3 py-2 text-xs font-bold text-slate-500 border-b border-slate-100">Selfie Match</div>
+                                <img src={user.kycData.selfieData} alt="Selfie" className="w-full object-cover max-h-48" />
+                              </div>
+                            )}
                           </div>
+                          {(!user.kycData.idFrontData && !user.kycData.idBackData && !user.kycData.selfieData) && (
+                            <div className="flex gap-2 mt-4 text-slate-500 italic">
+                              <span className="px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-md text-xs font-medium">✓ {user.kycData.idFrontName || 'ID Front'}</span>
+                              <span className="px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-md text-xs font-medium">✓ {user.kycData.idBackName || 'ID Back'}</span>
+                              <span className="px-3 py-1 bg-green-50 text-green-700 border border-green-200 rounded-md text-xs font-medium">✓ Selfie Match</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </motion.div>
+                    ) : (
+                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="pt-6 mt-6 border-t border-slate-100 text-sm">
+                        <div className="p-4 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-center">
+                          {language === 'vi' ? 'Người dùng chưa tải lên tài liệu xác minh.' : 'User has not uploaded verification documents yet.'}
+                        </div>
+                      </motion.div>
+                    )
                   )}
                 </Card>
               )) : (
@@ -250,10 +338,31 @@ export default function AdminDashboard() {
                         <p className="text-xs text-slate-500">{user.email}</p>
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider ${user.role === 'admin' ? 'bg-purple-100 text-purple-700' : user.role === 'seller' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
-                        {user.role}
-                      </span>
+                    <div className="flex flex-col items-end gap-1 relative">
+                      <div className="flex items-center gap-1">
+                        <select 
+                          value={roleUpdates[user.id] || user.role} 
+                          onChange={(e) => setRoleUpdates({ ...roleUpdates, [user.id]: e.target.value })}
+                          className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider outline-none border cursor-pointer border-transparent hover:border-slate-300 ${(roleUpdates[user.id] || user.role) === 'admin' ? 'bg-purple-100 text-purple-700' : (roleUpdates[user.id] || user.role) === 'seller' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}
+                          style={{ appearance: 'none', WebkitAppearance: 'none' }}
+                        >
+                          <option value="buyer" className="bg-white text-slate-900">BUYER</option>
+                          <option value="seller" className="bg-white text-slate-900">SELLER</option>
+                          <option value="advisor" className="bg-white text-slate-900">ADVISOR</option>
+                          <option value="admin" className="bg-white text-slate-900">ADMIN</option>
+                        </select>
+                        {(roleUpdates[user.id] && roleUpdates[user.id] !== user.role) && (
+                          <button
+                            onClick={() => {
+                              handleUpdateRole(user.id, roleUpdates[user.id]);
+                            }}
+                            className="bg-green-500 hover:bg-green-600 text-white rounded p-0.5 flex items-center justify-center transition-colors shadow-sm"
+                            title="Xác nhận đổi quyền"
+                          >
+                            <CheckCircle2 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
                       <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider ${user.kycStatus === 'verified' ? 'bg-green-100 text-green-700' : user.kycStatus === 'pending' ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'}`}>
                         KYC: {user.kycStatus}
                       </span>
@@ -296,6 +405,9 @@ export default function AdminDashboard() {
                     <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setExpandedDeal(expandedDeal === deal.id ? null : deal.id); }}>
                       {expandedDeal === deal.id ? (language === 'vi' ? 'Đóng' : 'Close') : (language === 'vi' ? 'Xem tài liệu' : 'View Docs')}
                     </Button>
+                    <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-600 hover:bg-red-50" onClick={(e) => { e.stopPropagation(); handleRejectDeal(deal.id); }}>
+                      <XCircle className="w-4 h-4" />
+                    </Button>
                     <Button size="sm" onClick={(e) => { e.stopPropagation(); handleApproveDeal(deal.id); }} className="bg-slate-900">
                       <CheckCircle2 className="w-4 h-4 mr-2" /> {language === 'vi' ? 'Duyệt' : 'Approve'}
                     </Button>
@@ -314,14 +426,31 @@ export default function AdminDashboard() {
                         <p className="font-bold">{deal.dealType}</p>
                       </div>
                       <div className="col-span-2">
-                        <p className="text-slate-400 font-medium mb-2">Uploaded Proof Documents</p>
-                        <div className="flex flex-wrap gap-2">
-                          {(deal.documents || []).length > 0 ? deal.documents.map((docName: string, i: number) => (
-                            <span key={i} className="px-3 py-1 bg-slate-100 text-slate-700 border border-slate-200 rounded-md text-xs font-medium">✓ {docName}</span>
-                          )) : (
-                            <span className="text-sm text-amber-600 bg-amber-50 px-2 py-1 rounded">No documents attached</span>
-                          )}
-                        </div>
+                        <p className="text-slate-400 font-medium mb-3">Uploaded Proof Documents</p>
+                        
+                        {(deal.documentsData && deal.documentsData.length > 0) ? (
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            {deal.documentsData.map((dataUri: string, i: number) => (
+                              dataUri ? (
+                                <div key={i} className="border border-slate-200 rounded-lg overflow-hidden">
+                                  <div className="bg-slate-50 px-3 py-2 text-xs font-bold text-slate-500 border-b border-slate-100 truncate flex items-center justify-between">
+                                    <span>Doc {i + 1}</span>
+                                    {deal.documents?.[i] && <span className="font-normal text-[10px] text-slate-400 max-w-[80px] truncate" title={deal.documents[i]}>{deal.documents[i]}</span>}
+                                  </div>
+                                  <img src={dataUri} alt={`Doc ${i + 1}`} className="w-full object-cover max-h-32" />
+                                </div>
+                              ) : null
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap gap-2">
+                            {(deal.documents || []).length > 0 ? deal.documents.map((docName: string, i: number) => (
+                              <span key={i} className="px-3 py-1 bg-slate-100 text-slate-700 border border-slate-200 rounded-md text-xs font-medium">✓ {docName}</span>
+                            )) : (
+                              <span className="text-sm text-amber-600 bg-amber-50 px-2 py-1 rounded">No documents attached</span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </motion.div>
@@ -335,19 +464,6 @@ export default function AdminDashboard() {
           </div>
         </section>
       </div>
-
-      <section className="mt-12">
-        <Card className="p-8 bg-red-50 border-red-100">
-          <div className="flex items-start gap-4">
-            <AlertTriangle className="w-6 h-6 text-red-600 mt-1" />
-            <div>
-              <h3 className="font-bold text-red-900">Critical System Health</h3>
-              <p className="text-sm text-red-700 mt-1">Security incident detected 4 hours ago. Automated blocking active on IP ranges from 124.xx.xx.xx. Global GSOC-2 encryption remains stable.</p>
-              <Button variant="outline" size="sm" className="mt-4 border-red-200 text-red-700 hover:bg-red-100">Review Incidents</Button>
-            </div>
-          </div>
-        </Card>
-      </section>
     </div>
   );
 }
